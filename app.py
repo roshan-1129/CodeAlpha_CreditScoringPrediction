@@ -31,13 +31,16 @@ def load_and_process_data():
     df_encoded = df.copy()
 
     for col in df_encoded.columns:
-        if df_encoded[col].dtype == 'object':
+        if col == 'customer_id':
+            # Keep customer_id as numeric, don't encode
+            continue
+        elif df_encoded[col].dtype == 'object':
             le = LabelEncoder()
             df_encoded[col] = le.fit_transform(df_encoded[col])
             label_encoders[col] = le
 
     # Convert specific columns to integers
-    columns_to_convert = ['Age', 'Duration', 'Job', 'Credit amount']
+    columns_to_convert = ['Age', 'Duration', 'Job', 'Credit amount', 'active_debits']
     for col in columns_to_convert:
         if col in df_encoded.columns:
             df_encoded[col] = df_encoded[col].astype(int)
@@ -83,7 +86,7 @@ def evaluate_models(models, X_test, y_test):
 df_encoded, df_original, label_encoders = load_and_process_data()
 
 # Features and target
-X = df_encoded.drop("Risk", axis=1)
+X = df_encoded.drop(["Risk", "customer_id"], axis=1)
 y = df_encoded["Risk"]
 
 # Split data
@@ -140,6 +143,25 @@ with tab1:
 with tab2:
     st.subheader(f"Make Prediction with {selected_model}")
 
+    # User-friendly labels mapping
+    friendly_labels = {
+        'Age': 'Age (years)',
+        'Sex': 'Gender',
+        'Job': 'Job Level',
+        'Housing': 'Housing Status',
+        'Saving accounts': 'Saving Accounts',
+        'Checking account': 'Checking Account',
+        'Credit amount': 'Loan Amount (€)',
+        'Duration': 'Loan Duration (months)',
+        'Purpose': 'Loan Purpose',
+        'total_paid': 'Total Amount Paid (€)',
+        'avg_payment': 'Average Monthly Payment (€)',
+        'on_time_payment_rate': 'On-Time Payment Rate (%)',
+        'debit_amount': 'Existing Debts (€)',
+        'debit_type': 'Type of Existing Debt',
+        'active_debits': 'Number of Active Debts'
+    }
+
     # Display feature descriptions
     col1, col2, col3 = st.columns(3)
 
@@ -155,18 +177,22 @@ with tab2:
         else:
             col_ref = col3
 
+        label = friendly_labels.get(col, col)
+
         with col_ref:
             if col in label_encoders:
                 # Get unique values from original data
                 unique_vals = df_original[col].unique()
-                feature_inputs[col] = st.selectbox(f"{col}:", unique_vals)
+                feature_inputs[col] = st.selectbox(f"{label}:", unique_vals)
             else:
-                # Numeric input
+                # Numeric input - all as integers
                 min_val = int(X[col].min())
                 max_val = int(X[col].max())
                 default_val = int((min_val + max_val) / 2)
+
+                # All numeric inputs use integer format
                 feature_inputs[col] = st.number_input(
-                    f"{col} (Range: {min_val}-{max_val}):",
+                    f"{label} (Range: {min_val}-{max_val}):",
                     min_value=min_val,
                     max_value=max_val,
                     value=default_val,
@@ -181,7 +207,8 @@ with tab2:
                 if col in label_encoders:
                     input_dict[col] = label_encoders[col].transform([feature_inputs[col]])[0]
                 else:
-                    input_dict[col] = feature_inputs[col]
+                    # Convert all numeric inputs to integers
+                    input_dict[col] = int(feature_inputs[col])
 
             input_df = pd.DataFrame([input_dict])
             input_scaled = scaler.transform(input_df)
@@ -230,3 +257,4 @@ with tab3:
         st.bar_chart(feature_importance.set_index('Feature'))
 
         st.dataframe(feature_importance.round(4), use_container_width=True)
+
